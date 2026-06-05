@@ -1,0 +1,7 @@
+.github
+.vscode
+.git
+build
+dist
+*.egg-info
+setup.py
