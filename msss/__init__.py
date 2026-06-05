@@ -186,15 +186,17 @@ class SServer:
                 try:
                     status, response_body = await self.request_handler(req_type, addr, body, reader, writer)
                 except Exception as e:
-                    status, response_body = 255,str(e).encode('utf-8')
+                    status, response_body = 255, str(e).encode('utf-8')
                     self.logger.error(f"在请求处理器中发生错误: {e}")
+                    import traceback
+                    traceback.print_exc()
 
                 writer.write(status.to_bytes(1, byteorder='big', signed=False))
                 writer.write(len(response_body).to_bytes(4, byteorder='big'))
                 if response_body:
                     writer.write(response_body)
                 await writer.drain()
-        except (aio.IncompleteReadError, ConnectionResetError):
+        except (aio.IncompleteReadError, ConnectionResetError, ConnectionError, ConnectionAbortedError):
             self.logger.info(f"来自 {addr} 的连接已断开。")
             return
         except Exception as e:
@@ -259,14 +261,15 @@ class Scaffolding:
             vendor = 'MSSS',
             kind = SKindEnum.host
         )
-        self.logger = logger if logger else logging.getLogger(f"<Scaffolding id='{id(self)} host='{host}' port='{port}' mc_port='{mc_port}' host_player='SProfile({host_player})'>")
+        self.logger = logger if logger else logging.getLogger(f"<Scaffolding id='{id(self)}' host='{host}' port='{port}' mc_port='{mc_port}' host_player=<SProfile {self.host_player}>>")
         s = self.server = server if server else SServer(host, port, mc_port, logger = self.logger)
         self.players = { self.host_player.machine_id: self.host_player }
         self.players_lt:dict[str, float] = {}
-        self.conns:dict[str, aio.StreamWriter] = {}
+        self.conns:dict[str, tuple[aio.StreamReader, aio.StreamWriter]] = {}
         self.lock = aio.Lock()
         self._clean_worker:Optional[Callable[[], Awaitable[None]]] = None
         self._clean_worker_task:Optional[aio.Task] = None
+        
 
         if setup_default_handlers:
             @s.protocol('c:ping')
@@ -287,16 +290,17 @@ class Scaffolding:
                 async with self.lock:
                     if not self.players.get(p.machine_id):
                         self.logger.info(f"新玩家加入: <SProfile {p}>")
-                    if req.writer is not (w := self.conns[p.machine_id]):
-                        self.logger.info(f"玩家 <SProfile {p}> 使用一个新连接加入了房间，正在关闭旧连接。")
-                        try:
-                            w.close()
-                            await w.wait_closed()
-                        except Exception:
-                            pass
+                    else:
+                        if req.writer is not (w := self.conns[p.machine_id][1]):
+                            self.logger.info(f"玩家 <SProfile {p}> 使用一个新连接加入了房间，正在关闭旧连接。")
+                            try:
+                                w.close()
+                                await w.wait_closed()
+                            except Exception:
+                                pass
 
                     self.players[p.machine_id] = p
-                    self.conns[p.machine_id] = req.writer
+                    self.conns[p.machine_id] = (req.reader, req.writer)
                     self.players_lt[p.machine_id] = time.time()
 
             @s.protocol('c:player_easytier_id')
@@ -311,8 +315,8 @@ class Scaffolding:
             @s.disconnected
             async def disconnected(addr:tuple[str, int]) -> None:
                 async with self.lock:
-                    for mid, w in list(self.conns.items()):
-                        if w.get_extra_info('peername') == addr:
+                    for mid, rw in list(self.conns.items()):
+                        if rw[1].get_extra_info('peername') == addr:
                             try:
                                 del self.players[mid]
                                 del self.players_lt[mid]
@@ -329,8 +333,8 @@ class Scaffolding:
                             for mid, ct in [i for i in self.players_lt.items()]:
                                 if t - ct > llt and not mid == self.host_player.machine_id:
                                     try:
-                                        self.logger.info(f"Cleaning player {mid}")
-                                        w = self.conns[mid]
+                                        self.logger.info(f"清除设备码为 {mid} 的玩家。")
+                                        r, w = self.conns[mid]
                                         w.close()
                                         await w.wait_closed()
                                         del self.players[mid]
@@ -363,7 +367,7 @@ class Scaffolding:
         """
         try:
             async with self.lock:
-                w = self.conns[mid]
+                w = self.conns[mid][1]
                 w.close()
                 await w.wait_closed()
                 return True
@@ -394,7 +398,7 @@ class Scaffolding:
         """
         return self.server.disconnected
     
-    def easytier(self, code:str, path:str = './easytier-core', dhcp:bool = True, extras:list[str] = []) -> str:
+    def easytier(self, code:str, path:str = '"./easytier-core"', dhcp:bool = True, extras:list[str] = []) -> str:
         """
         按照传入的房间码，生成一种适用于 Windows 平台的 EasyTier 启动命令。
 
@@ -428,6 +432,6 @@ if __name__ == '__main__':
     logger = logging.getLogger(__name__)
     logging.basicConfig(level=logging.INFO)
     logger.info('Use command:')
-    logger.info(app.easytier('U/AAAA-AAAA-AAAA-AAAA'))
+    logger.info(app.easytier('U/AAAA-AAAA-AAAA-AAAA', extras = ['--no-listener']))
     logger.info('to launch EasyTier')
     aio.run(app.run())

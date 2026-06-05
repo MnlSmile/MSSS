@@ -42,8 +42,8 @@ from msss import Scaffolding
 
 logging.basicConfig(level=logging.INFO)
 
-app = Scaffolding(host='0.0.0.0', port=13659, mc_port=25565)
-et_proc = subprocess.Popen(app.easytier('U/0000-0000-0000-0000'), shell=True)
+app = Scaffolding(host='0.0.0.0', port=13659, mc_port=25565, checking_freq=0.1)
+et_proc = subprocess.Popen(app.easytier('U/0000-0000-0000-0000', path='"./et/easytier-core"', extras=['--no-listener']), shell=True, stdout=open('./etlog', 'w', encoding='utf-8'))
 asyncio.run(app.run())
 et_proc.terminate()
 et_proc.wait()

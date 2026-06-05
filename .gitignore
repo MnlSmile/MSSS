@@ -5,3 +5,9 @@ build
 dist
 *.egg-info
 setup.py
+test.py
+et
+etlog
+easytier.log
+__pycache__
+*.__pyc__
