@@ -277,8 +277,12 @@ class Scaffolding:
                 return req.body
 
             @s.protocol('c:protocols')
-            async def protocols(req:SRequest) -> list:
-                return [k for k in s.protocol_handlers]
+            async def protocols(req:SRequest) -> SStrList:
+                temp = []
+                for proto in req.as_scaffolding_str_list():
+                    if ('any' in self.server.protocol_handlers) or (proto in self.server.protocol_handlers):
+                        temp.append(proto)
+                return SStrList(temp)
 
             @s.protocol('c:server_port')
             async def server_port(req:SRequest) -> bytes:
@@ -325,21 +329,38 @@ class Scaffolding:
                                 pass
                             finally:
                                 break
-
+            
+            #_mssscc = 'msss:connection_check'.encode('utf-8')
+            _mssscc = ''.encode('utf-8')
+            async def _cut_conn(w:aio.StreamWriter, mid:str):
+                w.close()
+                await w.wait_closed()
+                del self.players[mid]
+                del self.players_lt[mid]
+                del self.conns[mid]
             async def clean_worker(llt:float = llt, checking_freq:float = 1.0):
                 async with Timer(checking_freq, target = time.time) as timer:
                     async for t in timer:
                         async with self.lock:
-                            for mid, ct in [i for i in self.players_lt.items()]:
-                                if t - ct > llt and not mid == self.host_player.machine_id:
+                            # passive heartbeat check
+                            for mid, ct in list(self.players_lt.items()):
+                                if t - ct > llt and mid != self.host_player.machine_id:
                                     try:
-                                        self.logger.info(f"清除设备码为 {mid} 的玩家。")
-                                        r, w = self.conns[mid]
-                                        w.close()
-                                        await w.wait_closed()
-                                        del self.players[mid]
-                                        del self.players_lt[mid]
-                                        del self.conns[mid]
+                                        self.logger.info(f"清除玩家 <SProfile {self.players[mid]}>，原因：应用层无心跳。")
+                                        w = self.conns[mid][1]
+                                        await _cut_conn(w, mid)
+                                    except Exception:
+                                        pass
+                            # active connection check
+                            for mid, conn in list(self.conns.items()):
+                                try:
+                                    w = conn[1]
+                                    w.write(_mssscc)
+                                    await w.drain()
+                                except Exception:
+                                    try:
+                                        self.logger.info(f"清除玩家 <SProfile {self.players[mid]}>，原因：传输层断开连接。")
+                                        await _cut_conn(w, mid)
                                     except Exception:
                                         pass
             self._clean_worker = clean_worker
@@ -360,13 +381,14 @@ class Scaffolding:
         """
         踢出玩家。   
         方法不保证成功踢出。   
-        风险提示：由于 Scaffolding 协议运行在 EasyTier 网络上，且《我的世界》端口号公开透明，玩家有办法完全绕开 Scaffolding 协议，直接通过 EasyTier 网络加入《我的世界》服务器。
+        风险提示：由于 Scaffolding 协议运行在 EasyTier 网络上，且《我的世界》端口号公开透明，玩家有办法完全绕开 Scaffolding 协议，直接通过 EasyTier 网络加入《我的世界》服务器。因此，本方法不能保证服务器完全安全。
 
         Args:
-            mid (str): 目标玩家的机器标识符。
+            mid (str): 目标玩家的设备标识符。
         """
         try:
             async with self.lock:
+                self.logger.info(f"尝试踢出设备标识符为 {mid} 的玩家。")
                 w = self.conns[mid][1]
                 w.close()
                 await w.wait_closed()
@@ -400,7 +422,8 @@ class Scaffolding:
     
     def easytier(self, code:str, path:str = '"./easytier-core"', dhcp:bool = True, extras:list[str] = []) -> str:
         """
-        按照传入的房间码，生成一种适用于 Windows 平台的 EasyTier 启动命令。
+        按照传入的房间码，生成一种适用于 Windows 平台的 EasyTier 启动命令。   
+        不会对房间码的有效性进行检查。
 
         Args:
             code (str): Scaffolding 房间码。
@@ -421,6 +444,8 @@ class Scaffolding:
         """
         运行 Scaffolding 服务器。   
         """
+        self.logger.info(f"如果端口 {self.server.mc_port} 上没有运行有效的《我的世界》服务器，Terracotta 和 HMCL 可能无法加入房间或者需要很长时间才能加入房间。")
+
         if self._clean_worker:
             self._clean_worker_task = aio.create_task(self._clean_worker())
         await self.server.run()

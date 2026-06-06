@@ -56,6 +56,13 @@ et_proc.wait()
 
 ---
 
+## 注意事项
+
+[Terracotta 陶瓦联机](https://github.com/burningtnt/Terracotta) 和 HMCL（内部调用 Terracotta 陶瓦联机）会扫描 `c:server_port` 协议返回的端口，校验其上是否运行着有效的《我的世界》服务器。   
+如果没有，Terracotta 陶瓦联机 和 HMCL 可能无法加入房间或者需要很长时间才能加入房间。
+
+---
+
 ## 自定义协议处理器
 
 使用 `@app.protocol('命名空间:协议名')` 装饰器即可注册自己的协议。  
@@ -63,19 +70,19 @@ et_proc.wait()
 
 ```python
 @app.protocol('my:hello')
-async def handle_hello(req):
+async def handle_hello(req:SRequest):
     # 解析客户端发送的 JSON 数据
     data = req.as_json()
     name = data.get('name', 'Guest')
     return {'message': f'Hello, {name}!'}
 ```
 
-**支持的返回类型**：
+**可选返回类型及默认行为**：
 - `None` → 空响应
 - `str` → UTF-8 编码
 - `bytes` / `bytearray` → 按原样发送
 - `BaseModel` (Pydantic) → JSON 编码
-- `SStrList` → Scaffolding 字符串列表（按 `\0` 分隔）
+- `SStrList` → 按 `\0` 分隔的 Scaffolding 字符串列表
 - `dict` / `list` → JSON 编码
 
 如果协议未注册，且您注册了 `any` 后备处理器，则会调用它；否则自动返回错误码 `255`。
@@ -92,7 +99,7 @@ async def handle_hello(req):
 示例输出：
 
 ```bash
-./easytier-core --network-name scaffolding-mc-AAAA-AAAA --network-secret AAAA-AAAA --hostname scaffolding-mc-server-13659 -p "https://etnode.zkitefly.eu.org/node1" -p "https://etnode.zkitefly.eu.org/node2" -d
+"./easytier-core" --network-name scaffolding-mc-AAAA-AAAA --network-secret AAAA-AAAA --hostname scaffolding-mc-server-13659 -p "https://etnode.zkitefly.eu.org/node1" -p "https://etnode.zkitefly.eu.org/node2" -d
 ```
 
 ---
@@ -135,5 +142,6 @@ app = Scaffolding(..., llt=30.0, checking_freq=5.0)
 ## 相关链接
 
 - [Scaffolding 协议](https://github.com/Scaffolding-MC/Scaffolding-MC)
+- [Terracotta 陶瓦联机](https://github.com/burningtnt/Terracotta)
 - [EasyTier](https://github.com/EasyTier/EasyTier)
 - [MSSS](https://github.com/MnlSmile/MSSS)
