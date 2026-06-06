@@ -188,8 +188,6 @@ class SServer:
                 except Exception as e:
                     status, response_body = 255, str(e).encode('utf-8')
                     self.logger.error(f"在请求处理器中发生错误: {e}")
-                    import traceback
-                    traceback.print_exc()
 
                 writer.write(status.to_bytes(1, byteorder='big', signed=False))
                 writer.write(len(response_body).to_bytes(4, byteorder='big'))
