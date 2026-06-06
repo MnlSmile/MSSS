@@ -16,7 +16,7 @@ class SKindEnum(str, Enum):
     guest = 'GUEST'
     GUEST = 'GUEST'
 
-async def void_func(*args, **kwargs) -> None:
+async def async_void_func(*args, **kwargs) -> None:
     return
 
 class SStrList(list): ...
@@ -91,8 +91,8 @@ class SServer:
         self.logger = logger if logger else logging.getLogger(f"<SServer python_id='{id(self)} host='{self.host}' port='{self.port}' mc_port='{self.mc_port}'>")
 
         self.protocol_handlers:dict[str, Callable[[SRequest], Awaitable[bytearray|bytes|BaseModel|dict|list]]] = {}
-        self.connected_callback:Callable[[tuple[str, int], Awaitable[None]]] = void_func
-        self.disconnected_callback:Callable[[tuple[str, int], Awaitable[None]]] = void_func
+        self.connected_callback:Callable[[tuple[str, int], Awaitable[None]]] = async_void_func
+        self.disconnected_callback:Callable[[tuple[str, int], Awaitable[None]]] = async_void_func   
     
     def protocol(self, protocol:str):
         """
@@ -328,8 +328,7 @@ class Scaffolding:
                             finally:
                                 break
             
-            #_mssscc = 'msss:connection_check'.encode('utf-8')
-            _mssscc = ''.encode('utf-8')
+            _mssscc = 'msss:cc'.encode('utf-8')
             async def _cut_conn(w:aio.StreamWriter, mid:str):
                 w.close()
                 await w.wait_closed()
@@ -404,19 +403,19 @@ class Scaffolding:
         """
         return self.server.protocol(protocol)
     
-    def connected(self):
+    def connected(self, func):
         """
         将函数声明为连接建立时自动调用的 connected 回调函数。   
         原函数不会被装饰器替换。
         """
-        return self.server.connected
+        return self.server.connected(func)
     
-    def disconnected(self):
+    def disconnected(self, func):
         """
         将函数声明为连断开时自动调用的 disconnected 回调函数。   
         原函数不会被装饰器替换。
         """
-        return self.server.disconnected
+        return self.server.disconnected(func)
     
     def easytier(self, code:str, path:str = '"./easytier-core"', dhcp:bool = True, extras:list[str] = []) -> str:
         """
