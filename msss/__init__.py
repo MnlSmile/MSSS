@@ -328,7 +328,6 @@ class Scaffolding:
                             finally:
                                 break
             
-            _mssscc = 'msss:cc'.encode('utf-8')
             async def _cut_conn(w:aio.StreamWriter, mid:str):
                 w.close()
                 await w.wait_closed()
@@ -345,18 +344,6 @@ class Scaffolding:
                                     try:
                                         self.logger.info(f"清除玩家 <SProfile {self.players[mid]}>，原因：应用层无心跳。")
                                         w = self.conns[mid][1]
-                                        await _cut_conn(w, mid)
-                                    except Exception:
-                                        pass
-                            # active connection check
-                            for mid, conn in list(self.conns.items()):
-                                try:
-                                    w = conn[1]
-                                    w.write(_mssscc)
-                                    await w.drain()
-                                except Exception:
-                                    try:
-                                        self.logger.info(f"清除玩家 <SProfile {self.players[mid]}>，原因：传输层断开连接。")
                                         await _cut_conn(w, mid)
                                     except Exception:
                                         pass
