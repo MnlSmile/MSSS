@@ -127,8 +127,8 @@ app = Scaffolding(..., llt=30.0, checking_freq=5.0)
 
 ## 依赖项
 
-- [py-machineid](https://github.com/ab77/py-machineid)
-- [async-timer](https://github.com/MnlSmile/async-timer)
+- [py-machineid](https://github.com/keygen-sh/py-machineid)
+- [async-timer](https://github.com/IljaOrlovs/async-timer)
 - [pydantic](https://github.com/pydantic/pydantic)
 
 ---
